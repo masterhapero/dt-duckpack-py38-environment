@@ -7,7 +7,7 @@ ARG BASE_ORGANIZATION=duckietown
 ARG BASE_TAG=${DISTRO}-${ARCH}
 ARG LAUNCHER=default
 ARG OS_FAMILY=ubuntu
-ARG OS_DISTRO=focal
+ARG OS_DISTRO=bionic
 # ---
 ARG PROJECT_NAME
 ARG PROJECT_MAINTAINER
@@ -20,7 +20,7 @@ ARG PROJECT_FORMAT_VERSION
 FROM ${DOCKER_REGISTRY}/${BASE_ORGANIZATION}/${BASE_REPOSITORY}:${BASE_TAG} as duckietown
 
 # base image
-FROM docker.io/${ARCH}/${OS_FAMILY}:${OS_DISTRO}
+FROM nvcr.io/nvidia/l4t-cuda:10.2.460-runtime
 
 # configure pip
 ARG PIP_INDEX_URL="https://pypi.org/simple"
@@ -79,24 +79,38 @@ COPY --from=duckietown "${SOURCE_DIR}/dt-base-environment" "${SOURCE_DIR}/dt-bas
 RUN rm -rf "${SOURCE_DIR}/dt-base-environment/packages"
 
 # copy assets
-RUN cp ${SOURCE_DIR}/dt-base-environment/assets/qemu/${TARGETPLATFORM}/* /usr/bin/ && \
-    cp ${SOURCE_DIR}/dt-base-environment/assets/bin/* /usr/local/bin/
+RUN cp ${SOURCE_DIR}/dt-base-environment/assets/bin/* /usr/local/bin/
+
+# Add NVIDIA repositories for TensorRT dependencies
+RUN wget -q -O - https://repo.download.nvidia.com/jetson/jetson-ota-public.asc | apt-key add - && \
+  echo "deb https://repo.download.nvidia.com/jetson/common r32.7 main" > /etc/apt/sources.list.d/nvidia-l4t-apt-source.list && \
+  echo "deb https://repo.download.nvidia.com/jetson/t194 r32.7 main" >> /etc/apt/sources.list.d/nvidia-l4t-apt-source.list
 
 # Install gnupg required for apt-key (not in base image since Focal)
 RUN apt-get update \
   && apt-get install -y --no-install-recommends \
         gnupg \
-        python3-dev \
-        python3-pip \
+        curl \
+        python3.8 \
+        python3.8-dev \
         make \
         cmake \
         gcc \
         sudo \
   && rm -rf /var/lib/apt/lists/*
 
+RUN curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py && python3.8 get-pip.py && rm get-pip.py
+RUN pip3.8 install setuptools wheel
+RUN ln -sf /usr/bin/python3.8 /usr/bin/python3
+
 # upgrade PIP
 RUN python3 -m pip install pip==22.2 && \
     ln -s $(which python3.8) /usr/bin/pip3.8
+
+# Create symbolic links for python3.8 and pip3
+RUN ln -sf /usr/bin/python3.8 /usr/bin/python3
+RUN ln -s /usr/bin/pip3.8 /usr/bin/pip3
+RUN ln -s /usr/bin/pip3.8 /usr/bin/pip
 
 # install dependencies (PIP3), exclude computed lists because of the difference in base image
 RUN rm -f "${SOURCE_DIR}/dt-base-environment/dependencies-py3.computed.txt" && \
@@ -145,7 +159,8 @@ RUN addgroup --gid ${DT_GROUP_GID} "${DT_GROUP_NAME}" && \
 RUN cp -R ${SOURCE_DIR}/dt-commons/assets/root/. /
 
 # configure arch-specific environment
-RUN ${SOURCE_DIR}/dt-commons/assets/setup/${TARGETPLATFORM}/setup.sh
+# libraspberrypi-bin is not for bionic
+# RUN ${SOURCE_DIR}/dt-commons/assets/setup/${TARGETPLATFORM}/setup.sh
 
 # install assets
 RUN ${SOURCE_DIR}/dt-commons/assets/setup/install-binaries.sh
