@@ -1,6 +1,6 @@
 #docker buildx build -t masterhapero/jetson-base-environment --platform linux/aarch64 --build-arg TARGETARCH=arm64,REPO_PATH=/code/dt-base-environment  .
 BUILDKIT_PROGRESS=plain docker buildx build \
-	-t masterhapero/dt-duckpack-py38-environment \
+	-t masterhapero/dt-duckpack-py38-environment:ente-arm64v8 \
 	--platform linux/arm64 \
 	--build-arg ARCH=arm64v8 \
 	--build-arg DISTRO=ente \
